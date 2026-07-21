@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Program Files/Unity/Hub/Editor/**)",
+      "Read(//c/Program Files/**)",
+      "Bash(\"/c/Program Files/Unity/Hub/Editor/6000.5.3f1/Editor/Unity.exe\" -batchmode -nographics -quit -projectPath \"C:/CYS/FireEmblem/FireEmblem\" -logFile \"C:/CYS/FireEmblem/FireEmblem/compile_check.log\")",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(xargs -I{} echo {})",
+      "Bash(tasklist //FI \"IMAGENAME eq Unity.exe\")",
+      "Bash(mv \"Portraits/garon.png\" \"Portraits/eve.png\")",
+      "Bash(mv \"Portraits/garon.png.meta\" \"Portraits/eve.png.meta\")",
+      "Bash(mv \"Illustrations/garon.png\" \"Illustrations/eve.png\")",
+      "Bash(mv \"Illustrations/garon.png.meta\" \"Illustrations/eve.png.meta\")",
+      "PowerShell(Add-Type -AssemblyName System.Drawing; $files = @\\(\"C:\\\\CYS\\\\FireEmblem\\\\FireEmblem\\\\Assets\\\\StreamingAssets\\\\Portraits\\\\eve.png\",\"C:\\\\CYS\\\\FireEmblem\\\\FireEmblem\\\\Assets\\\\StreamingAssets\\\\Portraits\\\\vander.png\"\\); foreach \\($f in $files\\) { $img = [System.Drawing.Image]::FromFile\\($f\\); \"$f : $\\($img.Width\\) x $\\($img.Height\\)\"; $img.Dispose\\(\\) })",
+      "Bash(gh auth *)",
+      "PowerShell(gh *)",
+      "Bash(git --version)",
+      "Bash(git config *)",
+      "Bash(xargs grep -liE \"forecast|prediction|battle.*ui|weapon\")",
+      "Read(//c/CYS/FireEmblem/FireEmblem/**)",
+      "Bash(gh --version)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git add *)"
+    ]
+  }
+}
