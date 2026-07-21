@@ -77,7 +77,8 @@ namespace SRPG
             Player("알리어", WeaponLibrary.IronSword(), new Stats { maxHP = 21, atkCoins = OneCoin(9, 0), spd = 9, defCoins = OneCoin(7, 0), lck = 6, build = 8 }, new GridPosition(8, 5), "vander.png", "vander.png",
                 illustrationOffset: new Vector2(-40f, 15f), illustrationZoom: 2.6f),
             // "코인" 스탯 표시 확인용으로 반더만 코인 2개
-            Player("반더", WeaponLibrary.IronLance(), new Stats { maxHP = 27, atkCoins = new List<Coin> { new Coin(12, 0), new Coin(12, 0) }, spd = 5, defCoins = OneCoin(8, 0), lck = 4, build = 13 }, new GridPosition(7, 5)),
+            Player("반더", WeaponLibrary.IronLance(), new Stats { maxHP = 27, atkCoins = new List<Coin> { new Coin(12, 0), new Coin(12, 0) }, spd = 5, defCoins = OneCoin(8, 0), lck = 4, build = 13 }, new GridPosition(7, 5), "bandeo.png", "bandeo.png",
+                illustrationOffset: new Vector2(-40f, 55f)),
             Player("에티에", WeaponLibrary.IronBow(), new Stats { maxHP = 18, atkCoins = OneCoin(10, 0), spd = 12, defCoins = OneCoin(5, 0), lck = 7, build = 6 }, new GridPosition(8, 4)),
             Player("이브", WeaponLibrary.Elfire(), new Stats { maxHP = 16, atkCoins = OneCoin(10, 0), spd = 9, defCoins = OneCoin(7, 0), lck = 6, build = 5 }, new GridPosition(7, 4), "eve.png", "eve.png"),
             // 아군 첫 도끼(둔기) 사용자. 도끼는 무겁다는 설정에 맞춰 build를 가장 높게, spd는 가장 낮게 잡음

@@ -3,6 +3,9 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.EnhancedTouch;
+using Touch = UnityEngine.InputSystem.EnhancedTouch.Touch;
+using TouchPhase = UnityEngine.InputSystem.TouchPhase;
 
 namespace SRPG
 {
@@ -29,8 +32,10 @@ namespace SRPG
         private const float PunchZoomFactor = 0.6f;
         private const float PunchZoomDuration = 0.15f;
         // 마우스 휠/트랙패드로 자유 줌: 휠 델타에 곱하는 민감도와 오쏘그래픽 사이즈 허용 범위
-        private const float ScrollZoomSensitivity = 0.05f;
-        private const float ZoomLerpSpeed = 40f;
+        private const float ScrollZoomSensitivity = 0.15f;
+        // 두 손가락 핀치 줌: 손가락 사이 거리(픽셀) 변화량에 곱하는 민감도
+        private const float PinchZoomSensitivity = 0.01f;
+        private const float ZoomLerpSpeed = 120f;
         private const float MinOrthographicSize = 2f;
         private const float MaxOrthographicSize = 6f;
 
@@ -42,6 +47,7 @@ namespace SRPG
         private Vector3? focusTarget;
         private float baseOrthographicSize;
         private float? zoomTarget;
+        private float? pinchPrevDistance;
 
         private void Start()
         {
@@ -49,14 +55,113 @@ namespace SRPG
             baseOrthographicSize = ViewHeightTiles / 2f;
             cam.orthographicSize = baseOrthographicSize;
             if (startFocus.HasValue) FocusOnImmediate(startFocus.Value);
+            EnhancedTouchSupport.Enable();
+        }
+
+        private void OnDestroy()
+        {
+            EnhancedTouchSupport.Disable();
         }
 
         private void Update()
         {
-            HandlePointer();
-            HandleScrollZoom();
+            // 터치 입력이 있는 프레임엔 터치로만 처리(마우스와 동시에 처리하면 패닝이 서로 충돌함)
+            if (!HandleTouch())
+            {
+                HandlePointer();
+                HandleScrollZoom();
+            }
             HandleFocusLerp();
             HandleZoomLerp();
+        }
+
+        // 폰 터치 입력: 손가락 1개는 마우스와 동일하게 패닝/탭/유닛드래그로, 2개는 핀치 줌으로 처리.
+        // 이번 프레임에 터치가 하나라도 있었으면 true를 돌려줘서 Update()가 마우스 처리를 건너뛰게 함
+        private bool HandleTouch()
+        {
+            var touches = Touch.activeTouches;
+            if (touches.Count == 0)
+            {
+                pinchPrevDistance = null;
+                return false;
+            }
+
+            if (touches.Count >= 2)
+            {
+                // 핀치 중엔 한 손가락 패닝/드래그가 같이 발동하면 안 되므로 눌림 상태를 취소
+                if (pointerDown) { pointerDown = false; dragging = false; unitDragActive = false; }
+                HandlePinchZoom(touches[0], touches[1]);
+                return true;
+            }
+
+            pinchPrevDistance = null;
+            HandleSingleTouch(touches[0]);
+            return true;
+        }
+
+        private void HandleSingleTouch(Touch t)
+        {
+            switch (t.phase)
+            {
+                case TouchPhase.Began:
+                    // UI 버튼 위에서 시작된 터치는 맵 탭/드래그로 취급하지 않음
+                    if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(t.touchId))
+                        return;
+
+                    pointerDown = true;
+                    dragging = false;
+                    pressScreenPos = t.position;
+                    pressCamWorldPos = cam.transform.position;
+                    focusTarget = null;
+                    unitDragActive = IsUnitDragStart != null && IsUnitDragStart(pressScreenPos);
+                    break;
+
+                case TouchPhase.Moved:
+                case TouchPhase.Stationary:
+                    if (!pointerDown) return;
+                    // 유닛을 드래그하는 중에는 카메라가 같이 움직이면 안 되므로 패닝을 막음
+                    if (unitDragActive) return;
+
+                    var cur = t.position;
+                    var delta = cur - pressScreenPos;
+                    if (!dragging && delta.magnitude > DragThresholdPixels)
+                        dragging = true;
+
+                    if (dragging)
+                    {
+                        float worldPerPixel = cam.orthographicSize * 2f / cam.pixelHeight;
+                        var worldDelta = new Vector3(-delta.x, -delta.y, 0f) * worldPerPixel;
+                        cam.transform.position = ClampToMap(pressCamWorldPos + worldDelta);
+                    }
+                    break;
+
+                case TouchPhase.Ended:
+                case TouchPhase.Canceled:
+                    if (!pointerDown) return;
+                    if (unitDragActive) OnUnitDragRelease?.Invoke(pressScreenPos, t.position);
+                    else if (!dragging) OnTap?.Invoke(pressScreenPos);
+                    pointerDown = false;
+                    dragging = false;
+                    unitDragActive = false;
+                    break;
+            }
+        }
+
+        // 손가락 두 개 사이 거리 변화를 오쏘그래픽 사이즈 변화로 바꿔줌(벌리면 확대, 좁히면 축소). 마우스 휠처럼 Lerp 없이 즉시 반영
+        private void HandlePinchZoom(Touch a, Touch b)
+        {
+            float dist = Vector2.Distance(a.position, b.position);
+            if (pinchPrevDistance.HasValue)
+            {
+                float delta = dist - pinchPrevDistance.Value;
+                baseOrthographicSize = Mathf.Clamp(
+                    baseOrthographicSize - delta * PinchZoomSensitivity,
+                    MinOrthographicSize, MaxOrthographicSize);
+                zoomTarget = null;
+                cam.orthographicSize = baseOrthographicSize;
+                cam.transform.position = ClampToMap(cam.transform.position);
+            }
+            pinchPrevDistance = dist;
         }
 
         // 마우스 휠/트랙패드로 확대·축소. baseOrthographicSize 자체를 바꿔서 전투 줌/리셋 기준점도 함께 갱신됨
@@ -70,7 +175,10 @@ namespace SRPG
             baseOrthographicSize = Mathf.Clamp(
                 baseOrthographicSize - scroll * ScrollZoomSensitivity,
                 MinOrthographicSize, MaxOrthographicSize);
-            zoomTarget = baseOrthographicSize;
+            // 휠 줌은 Lerp로 서서히 따라가지 않고 즉시 반영(전투 줌/펀치 줌은 기존처럼 zoomTarget Lerp를 그대로 씀)
+            zoomTarget = null;
+            cam.orthographicSize = baseOrthographicSize;
+            cam.transform.position = ClampToMap(cam.transform.position);
         }
 
         private void HandlePointer()
