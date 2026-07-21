@@ -110,7 +110,7 @@ namespace SRPG
 
                     pointerDown = true;
                     dragging = false;
-                    pressScreenPos = t.position;
+                    pressScreenPos = t.screenPosition;
                     pressCamWorldPos = cam.transform.position;
                     focusTarget = null;
                     unitDragActive = IsUnitDragStart != null && IsUnitDragStart(pressScreenPos);
@@ -122,7 +122,7 @@ namespace SRPG
                     // 유닛을 드래그하는 중에는 카메라가 같이 움직이면 안 되므로 패닝을 막음
                     if (unitDragActive) return;
 
-                    var cur = t.position;
+                    var cur = t.screenPosition;
                     var delta = cur - pressScreenPos;
                     if (!dragging && delta.magnitude > DragThresholdPixels)
                         dragging = true;
@@ -138,7 +138,7 @@ namespace SRPG
                 case TouchPhase.Ended:
                 case TouchPhase.Canceled:
                     if (!pointerDown) return;
-                    if (unitDragActive) OnUnitDragRelease?.Invoke(pressScreenPos, t.position);
+                    if (unitDragActive) OnUnitDragRelease?.Invoke(pressScreenPos, t.screenPosition);
                     else if (!dragging) OnTap?.Invoke(pressScreenPos);
                     pointerDown = false;
                     dragging = false;
@@ -150,7 +150,7 @@ namespace SRPG
         // 손가락 두 개 사이 거리 변화를 오쏘그래픽 사이즈 변화로 바꿔줌(벌리면 확대, 좁히면 축소). 마우스 휠처럼 Lerp 없이 즉시 반영
         private void HandlePinchZoom(Touch a, Touch b)
         {
-            float dist = Vector2.Distance(a.position, b.position);
+            float dist = Vector2.Distance(a.screenPosition, b.screenPosition);
             if (pinchPrevDistance.HasValue)
             {
                 float delta = dist - pinchPrevDistance.Value;
