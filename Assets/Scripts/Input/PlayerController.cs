@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,6 +15,19 @@ namespace SRPG
         public GridManager grid;
         public UIManager ui;
         public CameraController cameraController;
+
+        // 튜토리얼(GameRoot)이 진행 단계를 감지해 안내 말풍선을 띄우는 데 쓰는 훅. 평소 플레이에서는 아무도 구독하지 않아 동작에 영향 없음
+        public event Action OnUnitSelected;
+        public event Action OnActionMenuOpened;
+        public event Action OnWeaponSelectOpened;
+        public event Action OnWeaponPreviewed;
+        public event Action OnWeaponConfirmed;
+        public event Action OnAttackTargetSelected;
+        public event Action OnCombatExecuting;
+        public event Action OnUnitActionEnded;
+
+        // 튜토리얼이 특정 단계에서 "이 칸만 누를 수 있음"으로 제한할 때 씀. null이면 평소처럼 어디든 누를 수 있음(일반 플레이는 항상 null)
+        public GridPosition? TutorialAllowedTap;
 
         private InputState state = InputState.Idle;
         private Unit selectedUnit;
@@ -35,7 +49,7 @@ namespace SRPG
             if (state == InputState.TargetSelected && pendingTarget == null)
                 UpdateHoveredTarget();
 
-            if (Mouse.current.rightButton.wasPressedThisFrame)
+            if (Mouse.current.rightButton.wasPressedThisFrame && !ui.IsShowingTutorialMessage)
             {
                 if (state == InputState.MenuOpen) CancelMoveFromMenu();
                 else if (state == InputState.WeaponSelect) CancelWeaponSelect();
@@ -100,10 +114,12 @@ namespace SRPG
         public void HandleTap(Vector2 screenPos)
         {
             if (gameManager.phase != TurnPhase.Player) return;
+            if (ui.IsShowingTutorialMessage) return; // 튜토리얼 안내 문구가 떠 있는 동안은 "확인"을 누르기 전까지 조작 불가
             if (state == InputState.MenuOpen) return;
 
             var gp = ScreenToGrid(screenPos);
             if (!grid.InBounds(gp)) return;
+            if (TutorialAllowedTap.HasValue && gp != TutorialAllowedTap.Value) return; // 튜토리얼이 지정한 칸이 아니면 무시
 
             switch (state)
             {
@@ -126,10 +142,12 @@ namespace SRPG
         public bool CanDragUnitAt(Vector2 screenPos)
         {
             if (gameManager.phase != TurnPhase.Player) return false;
+            if (ui.IsShowingTutorialMessage) return false; // 튜토리얼 안내 문구가 떠 있는 동안은 "확인"을 누르기 전까지 조작 불가
             if (state != InputState.Idle && state != InputState.UnitSelected) return false;
 
             var gp = ScreenToGrid(screenPos);
             if (!grid.InBounds(gp)) return false;
+            if (TutorialAllowedTap.HasValue && gp != TutorialAllowedTap.Value) return false; // 튜토리얼이 지정한 칸이 아니면 드래그 시작 불가
             var unit = grid.GetOccupant(gp);
             // 이미 선택된 유닛의 자리를 다시 누르면 드래그 시작이 아니라 일반 탭으로 처리해서,
             // TryMoveOrReselect -> ConfirmDestination(제자리 이동)을 거쳐 행동 선택창이 뜨게 함
@@ -139,6 +157,8 @@ namespace SRPG
 
         public void HandleUnitDragRelease(Vector2 pressScreenPos, Vector2 releaseScreenPos)
         {
+            if (ui.IsShowingTutorialMessage) return;
+
             var pressGp = ScreenToGrid(pressScreenPos);
             if (!grid.InBounds(pressGp)) return;
 
@@ -148,7 +168,9 @@ namespace SRPG
             var releaseGp = ScreenToGrid(releaseScreenPos);
             var target = grid.InBounds(releaseGp) ? grid.GetOccupant(releaseGp) : null;
 
-            if (target != null && target.team == Team.Enemy && target.IsAlive)
+            // 튜토리얼이 칸을 제한하는 동안(TutorialAllowedTap != null)은 드래그로 바로 공격하는 지름길을 막아서,
+            // 이동 -> 행동메뉴 -> 무기선택 -> 타겟선택으로 이어지는 정해진 순서를 그대로 따라가게 함
+            if (target != null && target.team == Team.Enemy && target.IsAlive && !TutorialAllowedTap.HasValue)
                 TryQuickAttack(unit, target);
             else
                 TrySelectUnit(pressGp);
@@ -244,6 +266,7 @@ namespace SRPG
             ui.ShowSelectedUnit(unit);
             ShowMoveAndAttackRange(unit);
             RefreshMatchupIndicators();
+            OnUnitSelected?.Invoke();
         }
 
         // 선택된 유닛이 지금 들고 있는(또는 무기 선택창에서 미리 보는) 무기 기준으로,
@@ -371,6 +394,7 @@ namespace SRPG
         {
             state = InputState.MenuOpen;
             ui.ShowActionMenu(attackableTargets.Count > 0, HandleAttackChosen, HandleWaitChosen, CancelMoveFromMenu);
+            OnActionMenuOpened?.Invoke();
         }
 
         private void HandleAttackChosen()
@@ -379,6 +403,7 @@ namespace SRPG
             state = InputState.WeaponSelect;
             previewWeapon = null;
             ui.ShowWeaponSelect(selectedUnit.weaponSlots, ComputeWeaponUsability(selectedUnit, selectedUnit.position), PreviewWeapon, ConfirmWeaponChoice, CancelWeaponSelect);
+            OnWeaponSelectOpened?.Invoke();
         }
 
         // 무기를 누르기만 한 상태: 아직 확정 전이므로 사거리만 미리 보여줌
@@ -389,6 +414,7 @@ namespace SRPG
             var rangeTiles = Pathfinding.GetTilesInRange(grid, selectedUnit.position, w.minRange, w.maxRange);
             grid.ShowHighlights(rangeTiles, HighlightType.Attack);
             RefreshMatchupIndicators(w.type); // 미리 보는 무기 기준으로 상성 표시도 같이 갱신
+            OnWeaponPreviewed?.Invoke();
         }
 
         // 확인 버튼을 눌러야 실제로 그 무기를 장착하고 타겟 선택 단계로 넘어감
@@ -429,6 +455,7 @@ namespace SRPG
             state = InputState.TargetSelected;
             pendingTarget = null;
             RefreshMatchupIndicators();
+            OnWeaponConfirmed?.Invoke();
         }
 
         private void CancelWeaponSelect()
@@ -476,6 +503,7 @@ namespace SRPG
             pendingTarget = target;
             hoveredTarget = target;
             RefreshForecastFor(target);
+            OnAttackTargetSelected?.Invoke();
         }
 
         // 공격 버튼을 누르거나, 확정 대기 중인 타겟을 다시 탭하면 실제로 전투를 시작함
@@ -487,6 +515,7 @@ namespace SRPG
             pendingTarget = null;
             grid.ClearHighlights();
             state = InputState.Animating;
+            OnCombatExecuting?.Invoke();
             StartCoroutine(RunPlayerCombat(selectedUnit, target));
         }
 
@@ -538,6 +567,7 @@ namespace SRPG
             ui.HideSelectedUnit();
             ClearMatchupIndicators();
             state = InputState.Idle;
+            OnUnitActionEnded?.Invoke();
 
             if (gameManager.phase == TurnPhase.Player && gameManager.PlayerUnits.Where(u => u.IsAlive).All(u => u.hasActed))
                 gameManager.RequestEndPlayerPhase();

@@ -26,6 +26,8 @@ namespace SRPG
         // 가로 칸 수 = TargetAspect(2) x ViewHeightTiles. 가로 14칸이 되도록 7로 맞춤(세로는 그 절반인 7칸)
         private const float ViewHeightTiles = 7f;
         private const float FocusLerpSpeed = 6f;
+        // 캐릭터를 포커스할 때 화면 정중앙 대신 살짝 위쪽에 보이도록, 카메라가 바라보는 지점을 캐릭터보다 아래로 당겨서 잡음
+        private const float FocusVerticalOffset = 0.3f;
         // 전투 시작 시 살짝 당겨보는 줌인 비율(오쏘그래픽 사이즈를 줄이면 확대됨). 0.85 = 15% 확대
         private const float CombatZoomFactor = 0.85f;
         // VS 화면 전환 직전 한 번 더 확 당기는 비율/시간(짧고 빠르게 "펀치인"하는 느낌)
@@ -228,13 +230,13 @@ namespace SRPG
         public void FocusOn(GridPosition gp)
         {
             var world = grid.GridToWorld(gp);
-            focusTarget = new Vector3(world.x, world.y, cam.transform.position.z);
+            focusTarget = new Vector3(world.x, world.y - FocusVerticalOffset, cam.transform.position.z);
         }
 
         // 그리드 칸 단위가 아니라 임의의 월드 좌표(예: 전투 중인 두 유닛의 중간 지점)로 부드럽게 이동할 때 씀
         public void FocusOnWorldPoint(Vector3 worldPos)
         {
-            focusTarget = new Vector3(worldPos.x, worldPos.y, cam.transform.position.z);
+            focusTarget = new Vector3(worldPos.x, worldPos.y - FocusVerticalOffset, cam.transform.position.z);
         }
 
         // 포커스 이동(Lerp)이 아직 끝나지 않았는지(목표에 도달해 focusTarget이 null로 비워졌는지) 확인용
@@ -243,7 +245,7 @@ namespace SRPG
         public void FocusOnImmediate(GridPosition gp)
         {
             var world = grid.GridToWorld(gp);
-            cam.transform.position = ClampToMap(new Vector3(world.x, world.y, cam.transform.position.z));
+            cam.transform.position = ClampToMap(new Vector3(world.x, world.y - FocusVerticalOffset, cam.transform.position.z));
             focusTarget = null;
         }
 

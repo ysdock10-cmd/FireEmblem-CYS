@@ -46,6 +46,21 @@ namespace SRPG
             return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
         }
 
+        // StreamingAssets/Tiles 안의 이미지를 지형 타일 스프라이트로 불러옴(없으면 null 반환). 타일 한 칸(1x1)에 꽉 차게 그려짐
+        public static Sprite LoadTileSprite(string fileName)
+        {
+            string path = Path.Combine(Application.streamingAssetsPath, "Tiles", fileName);
+            if (!File.Exists(path)) return null;
+
+            // 화면이 축소될 때 도트처럼 어른거리지 않도록 밉맵 체인을 켬(캐릭터 초상화와 같은 이유)
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, true);
+            tex.LoadImage(File.ReadAllBytes(path));
+            tex.filterMode = FilterMode.Trilinear;
+            tex.anisoLevel = 4;
+
+            return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), tex.height);
+        }
+
         public static Sprite SquareSprite(Color fill, Color? border = null, int size = 256, int borderWidth = 16)
         {
             var tex = new Texture2D(size, size);

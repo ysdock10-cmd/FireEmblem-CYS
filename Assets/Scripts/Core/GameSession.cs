@@ -6,7 +6,7 @@ namespace SRPG
     // null이면 홈 화면부터 시작(기존 동작), 값이 있으면 그 스테이지로 바로 진입(재도전/다음 스테이지/스테이지 선택)
     public static class GameSession
     {
-        public const int StageCount = 2;
+        public const int StageCount = 6;
         public static int? PendingStageIndex;
 
         // 한 번이라도 클리어(승리)한 스테이지 번호 모음. 씬 리로드에도 유지되도록 정적 필드로 둠(앱을 완전히 재시작하면 초기화됨)

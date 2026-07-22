@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace SRPG
@@ -65,6 +66,13 @@ namespace SRPG
             unitName = def.unitName;
             team = def.team;
             stats = def.baseStats.Clone();
+            // 재화로 강화한 만큼 최대 체력/기본공격/기본수비를 가산(아군만 해당 - 적 이름과 겹칠 일은 없지만 그래도 팀으로 한 번 더 안전하게 구분)
+            if (team == Team.Player)
+            {
+                stats.maxHP += PlayerProgress.GetBonusHP(unitName);
+                AddCoinBonus(stats.atkCoins, PlayerProgress.GetBonusAtk(unitName));
+                AddCoinBonus(stats.defCoins, PlayerProgress.GetBonusDef(unitName));
+            }
             currentHP = stats.maxHP;
             weapon = def.weapon;
             weaponSlots[0] = weapon;
@@ -91,10 +99,29 @@ namespace SRPG
             bodyRenderer.sprite = portraitSprite != null ? portraitSprite : VisualFactory.ClassSprite(weapon.type, teamColor);
             bodyRenderer.sortingOrder = 10;
 
+            BuildTileOutline();
             BuildHpBar();
             BuildJobIcon();
             SnapToGrid(grid);
             RefreshHpBar();
+        }
+
+        // 반투명하게 둬서 밑에 깔린 타일 색(잔디 그림의 밝고 어두운 부분 등)이 살짝 비쳐 보이도록 함
+        private static readonly Color PlayerTileOutlineColor = new Color(0.3f, 0.55f, 1f, 0.5f);
+        private static readonly Color EnemyTileOutlineColor = new Color(1f, 0.25f, 0.25f, 0.5f);
+        private const int TileOutlineThickness = 18;
+
+        // 이 유닛이 서 있는 칸 테두리에 선을 그려서 아군(파랑)/적(빨강)이 있는 칸을 한눈에 구분되게 함.
+        // visualRoot가 아니라 루트(transform)에 붙여서 브레이크 상태의 흔들림에 영향받지 않고 칸에 고정됨
+        private void BuildTileOutline()
+        {
+            var outlineGo = new GameObject("TileOutline");
+            outlineGo.transform.SetParent(transform, false);
+            Color color = team == Team.Player ? PlayerTileOutlineColor : EnemyTileOutlineColor;
+            var sr = outlineGo.AddComponent<SpriteRenderer>();
+            // 투명한 안쪽 색을 테두리색과 같은 RGB로 맞춰서, 이중선형 필터링으로 경계가 어둡게 번지지 않게 함
+            sr.sprite = VisualFactory.SquareSprite(new Color(color.r, color.g, color.b, 0f), color, 256, TileOutlineThickness);
+            sr.sortingOrder = 2; // 타일(0)/이동·공격 하이라이트(1)보다 위, 캐릭터 그림(10)보다는 아래
         }
 
         // 브레이크 상태인 동안 그리드/전투 애니메이션(루트 transform)과 겹치지 않게 자식(Visual)만 흔듦
@@ -224,6 +251,27 @@ namespace SRPG
 
             DamagePopup.Spawn(transform.position, amount);
             return amount;
+        }
+
+        // 캐릭터 확인 화면의 "캐릭터 레벨업" 한 번으로 체력/기본공격/기본수비가 함께 오름.
+        // 씬을 다시 로드하지 않고도 바로 반영되도록 이미 Initialize된 런타임 스탯을 직접 올림
+        public void LevelUp(int hpAmount, int atkAmount, int defAmount)
+        {
+            stats.maxHP += hpAmount;
+            currentHP += hpAmount;
+            RefreshHpBar();
+            AddCoinBonus(stats.atkCoins, atkAmount);
+            AddCoinBonus(stats.defCoins, defAmount);
+        }
+
+        // 코인 리스트의 첫 번째 코인 앞/뒷면에 각각 bonus를 더해, 그 코인의 평균(및 기본공격/기본수비 합산값)이 정확히 bonus만큼 오르게 함
+        private static void AddCoinBonus(List<Coin> coins, int bonus)
+        {
+            if (bonus == 0 || coins.Count == 0) return;
+            var c = coins[0];
+            c.heads += bonus;
+            c.tails += bonus;
+            coins[0] = c;
         }
 
         public void SnapToGrid(GridManager grid)

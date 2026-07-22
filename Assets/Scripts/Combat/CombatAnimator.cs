@@ -64,7 +64,9 @@ namespace SRPG
                 yield return ui.PlayVsHitReaction(attacker, attacker.isBroken);
             }
 
-            // 4) VS 화면을 닫고 맵으로 복귀
+            // 4) 체력바가 실제로 다 깎인 상태를 보여줄 때까지 기다린 뒤, 결과를 잠깐 더 보여주고(0.3초) 나서 VS 화면을 닫고 맵으로 복귀
+            yield return ui.WaitForCombatMiniHpDrain();
+            yield return new WaitForSeconds(0.3f);
             ui.HideVsScreen();
             camera?.ResetZoom();
             onComplete?.Invoke(log);

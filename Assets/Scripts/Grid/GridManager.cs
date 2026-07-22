@@ -18,6 +18,12 @@ namespace SRPG
         private Sprite highlightSprite;
         private int usedHighlights;
 
+        // 튜토리얼이 "지금은 이 칸만 누르세요"라고 짚어줄 때 쓰는 깜박이는 노란 테두리 표시
+        private GameObject guideMarker;
+        private SpriteRenderer guideMarkerRenderer;
+        private const float GuideMarkerBlinkSpeed = 5f;
+        private static readonly Color GuideMarkerColor = new Color(1f, 0.95f, 0.2f);
+
         public void BuildGrid(TileType[,] layout)
         {
             width = layout.GetLength(0);
@@ -41,7 +47,10 @@ namespace SRPG
                     var type = tileTypes[x, y];
                     if (!spriteByType.TryGetValue(type, out var sprite))
                     {
-                        sprite = VisualFactory.SquareSprite(Terrain.Get(type).color);
+                        // 평지는 사용자가 넣어둔 잔디 그림(StreamingAssets/Tiles/grass.png)을 쓰고, 없으면 기존처럼 단색으로 대체
+                        sprite = type == TileType.Plain
+                            ? VisualFactory.LoadTileSprite("grass.png") ?? VisualFactory.SquareSprite(Terrain.Get(type).color)
+                            : VisualFactory.SquareSprite(Terrain.Get(type).color);
                         spriteByType[type] = sprite;
                     }
 
@@ -51,6 +60,16 @@ namespace SRPG
                     var sr = go.AddComponent<SpriteRenderer>();
                     sr.sprite = sprite;
                     sr.sortingOrder = 0;
+
+                    // 평지는 전부 같은 그림을 쓰다 보니 격자처럼 반복되어 보이므로, 칸마다 90도 단위로 무작위 회전/좌우반전해서 반복 패턴을 덜 티나게 하고,
+                    // 원본 그림 자체가 밝고 채도가 높아서 색을 살짝 어둡게 틴트를 곱함
+                    if (type == TileType.Plain)
+                    {
+                        go.transform.rotation = Quaternion.Euler(0f, 0f, Random.Range(0, 4) * 90f);
+                        float flipX = Random.value < 0.5f ? -1f : 1f;
+                        go.transform.localScale = new Vector3(flipX, 1f, 1f);
+                        sr.color = new Color(0.9f, 0.9f, 0.9f);
+                    }
                 }
             }
         }
@@ -107,6 +126,35 @@ namespace SRPG
             sr.sortingOrder = 1;
             highlightPool.Add(go);
             return go;
+        }
+
+        // 지정한 칸에 깜박이는 노란 테두리를 띄움(튜토리얼이 "지금은 이 칸만" 누르라고 짚어줄 때 씀)
+        public void ShowGuideMarker(GridPosition pos)
+        {
+            if (guideMarker == null)
+            {
+                guideMarker = new GameObject("GuideMarker");
+                guideMarker.transform.SetParent(highlightRoot);
+                guideMarkerRenderer = guideMarker.AddComponent<SpriteRenderer>();
+                // 투명한 안쪽 색을 테두리색과 같은 RGB로 맞춰서, 이중선형 필터링으로 경계가 어둡게 번지지 않게 함
+                guideMarkerRenderer.sprite = VisualFactory.SquareSprite(new Color(GuideMarkerColor.r, GuideMarkerColor.g, GuideMarkerColor.b, 0f), GuideMarkerColor, 256, 24);
+                guideMarkerRenderer.sortingOrder = 3; // 이동/공격 하이라이트(1), 유닛 타일 테두리(2)보다 위
+            }
+            guideMarker.transform.position = GridToWorld(pos);
+            guideMarker.SetActive(true);
+        }
+
+        public void HideGuideMarker()
+        {
+            if (guideMarker != null) guideMarker.SetActive(false);
+        }
+
+        private void Update()
+        {
+            if (guideMarker == null || !guideMarker.activeSelf) return;
+            float alpha = Mathf.Lerp(0.3f, 1f, (Mathf.Sin(Time.time * GuideMarkerBlinkSpeed) + 1f) * 0.5f);
+            var c = guideMarkerRenderer.color;
+            guideMarkerRenderer.color = new Color(c.r, c.g, c.b, alpha);
         }
     }
 }
